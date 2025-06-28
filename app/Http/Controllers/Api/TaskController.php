@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreUpdateTaskRequest;
 use App\Models\Task;
-use Illuminate\Http\Request;
+use App\Jobs\DeleteTaskJob;
 
 class TaskController extends Controller
 {
@@ -74,6 +74,9 @@ class TaskController extends Controller
         return response()->json(null, 204);
     }
 
+    /**
+     * Toggle the finalizado status of the specified task.
+     */
     public function toggle(string $id)
     {
         $task = Task::find($id);
@@ -84,6 +87,11 @@ class TaskController extends Controller
 
         $task->finalizado = !$task->finalizado;
         $task->save();
+
+        if ($task->finalizado) {
+            // Dispara o job para rodar em 10 minutos
+            DeleteTaskJob::dispatch($task->id)->delay(now()->addMinutes(10));
+        }
 
         return response()->json($task);
     }

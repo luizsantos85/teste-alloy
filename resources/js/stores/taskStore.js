@@ -73,7 +73,7 @@ export const useTaskStore = defineStore("tasks", {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         ...task,
-                        completed: !task.completed,
+                        finalizado: !task.finalizado,
                     }),
                 });
                 if (!response.ok) throw new Error("Erro ao atualizar status");

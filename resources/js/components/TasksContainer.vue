@@ -21,7 +21,7 @@ onMounted(() => {
 
 function openAddModal() {
     isEdit.value = false
-    form.value = { id: null, nome: '', descricao: '', data_limite: '', completed: false }
+    form.value = { id: null, nome: '', descricao: '', data_limite: '', finalizado: false }
     error.value = ''
     showModal.value = true
 }
@@ -126,7 +126,7 @@ defineExpose({ openAddModal })
                 <form @submit.prevent="saveTask" class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium mb-1">Nome</label>
-                        <input v-model="form.nome" type="text" required
+                        <input v-model="form.nome" type="text"
                             class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring focus:border-blue-400"
                             :class="{ 'border-red-500': error && !form.nome }" />
                     </div>
