@@ -14,6 +14,10 @@ class TaskController extends Controller
      */
     public function index()
     {
+        //comentado por não estar configurado
+        // $tasks = cache()->tags(['tasks'])->remember('tasks_all', 10, function () {
+        //     return Task::all();
+        // });
         $tasks = Task::all();
         return response()->json($tasks);
     }
@@ -25,6 +29,11 @@ class TaskController extends Controller
     {
         $validated = $request->validated();
         $task = Task::create($validated);
+
+        //comentado por não estar configurado
+        //invalida cache de tarefas
+        // cache()->tags(['tasks'])->flush();
+
         return response()->json($task, 201);
     }
 
@@ -34,6 +43,11 @@ class TaskController extends Controller
     public function show(string $id)
     {
         $task = Task::find($id);
+
+        //comentado por não estar configurado
+        // $task = cache()->tags(['tasks'])->remember("task_{$id}", 600, function () use ($id) {
+        //     return Task::find($id);
+        // });
 
         if (!$task) {
             return response()->json(['message' => 'Tarefa não encontrada'], 404);
@@ -56,6 +70,9 @@ class TaskController extends Controller
         $validated = $request->validated();
         $task->update($validated);
 
+        //comentado por não estar configurado
+        // cache()->tags(['tasks'])->flush();
+
         return response()->json($task);
     }
 
@@ -71,6 +88,10 @@ class TaskController extends Controller
         }
 
         $task->delete();
+
+        //comentado por não estar configurado
+        // cache()->tags(['tasks'])->flush();
+
         return response()->json(null, 204);
     }
 
