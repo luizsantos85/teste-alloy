@@ -1,8 +1,7 @@
 <script setup>
 import { ref, onMounted, defineExpose } from 'vue'
+import { useTaskStore } from '@/stores/taskStore'
 
-const tasks = ref([])
-const loading = ref(true)
 const showModal = ref(false)
 const isEdit = ref(false)
 const form = ref({
@@ -14,18 +13,11 @@ const form = ref({
 })
 const error = ref('')
 
-async function fetchTasks() {
-    loading.value = true
-    try {
-        const response = await fetch('/api/tasks')
-        if (!response.ok) throw new Error('Erro ao buscar tarefas')
-        tasks.value = await response.json()
-    } catch (e) {
-        tasks.value = []
-    } finally {
-        loading.value = false
-    }
-}
+const taskStore = useTaskStore()
+
+onMounted(() => {
+    taskStore.fetchTasks()
+})
 
 function openAddModal() {
     isEdit.value = false
@@ -48,26 +40,12 @@ async function saveTask() {
         return
     }
     try {
-        let response
         if (isEdit.value) {
-            response = await fetch(`/api/tasks/${form.value.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(form.value)
-            })
+            await taskStore.updateTask(form.value.id, form.value)
         } else {
-            response = await fetch('/api/tasks', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(form.value)
-            })
-        }
-        if (!response.ok) {
-            const data = await response.json()
-            throw new Error(data.message || 'Erro ao salvar tarefa')
+            await taskStore.createTask(form.value)
         }
         showModal.value = false
-        await fetchTasks()
     } catch (e) {
         error.value = e.message
     }
@@ -75,354 +53,106 @@ async function saveTask() {
 
 async function deleteTask(id) {
     if (!confirm('Tem certeza que deseja deletar esta tarefa?')) return
-    try {
-        const response = await fetch(`/api/tasks/${id}`, { method: 'DELETE' })
-        if (!response.ok) throw new Error('Erro ao deletar tarefa')
-        tasks.value = tasks.value.filter(task => task.id !== id)
-    } catch (e) {
-        alert('Erro ao deletar tarefa')
-    }
+    await taskStore.deleteTask(id)
 }
 
 async function toggleCompleted(task) {
-    try {
-        const response = await fetch(`/api/tasks/${task.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...task, completed: !task.completed })
-        })
-        if (!response.ok) throw new Error('Erro ao atualizar tarefa')
-        task.completed = !task.completed
-    } catch (e) {
-        alert('Erro ao atualizar status da tarefa')
-    }
+    await taskStore.toggleTask(task.id)
 }
 
-onMounted(fetchTasks)
 defineExpose({ openAddModal })
 </script>
 
 <template>
-    <div class="tasks-container">
-        <div v-if="loading" class="loading">Carregando...</div>
-        <ul v-else class="tasks-list">
-            <li v-for="task in tasks" :key="task.id" class="task-item">
-                <div class="task-info">
-                    <div class="task-actions">
-                        <label class="toggle-switch">
-                            <input type="checkbox" :checked="task.completed" @change="toggleCompleted(task)" />
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <span :class="['task-title', task.completed ? 'completed' : '']">
+    <div class="max-w-2xl mx-auto mt-10 bg-white rounded-xl shadow-lg p-8 font-sans">
+        <div v-if="taskStore.loading" class="text-center py-8 text-blue-500">
+            <svg class="animate-spin h-6 w-6 mx-auto mb-2" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+            </svg>
+            Carregando...
+        </div>
+        <ul v-else class="divide-y divide-gray-200">
+            <li v-for="task in taskStore.tasks" :key="task.id" class="flex items-center justify-between py-4">
+                <div class="flex items-center gap-3">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" class="sr-only peer" :checked="task.finalizado"
+                            @change="toggleCompleted(task)" />
+                        <div
+                            class="w-10 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-400 rounded-full peer peer-checked:bg-blue-600 transition">
+                        </div>
+                        <div
+                            class="absolute left-1 top-1 bg-white w-4 h-4 rounded-full shadow peer-checked:translate-x-4 transition">
+                        </div>
+                    </label>
+                    <span :class="['font-medium', task.finalizado ? 'line-through text-gray-400' : 'text-gray-800']">
                         {{ task.nome }}
                     </span>
-                    <span v-if="!task.completed && task.data_limite && new Date(task.data_limite) < new Date()"
-                        class="status status-overdue">
+                    <span v-if="!task.finalizado && task.data_limite && new Date(task.data_limite) < new Date()"
+                        class="inline-block px-2 py-1 text-xs rounded bg-red-100 text-red-700 font-semibold">
                         Vencida
                     </span>
-                    <span v-else class="status" :class="task.completed ? 'status-done' : 'status-pending'">
-                        {{ task.completed ? 'Concluída' : 'Pendente' }}
+                    <span v-else class="inline-block px-2 py-1 text-xs rounded font-semibold"
+                        :class="task.finalizado ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'">
+                        {{ task.finalizado ? 'Concluída' : 'Pendente' }}
                     </span>
-                    <span v-if="task.data_limite" class="task-date">
+                    <span v-if="task.data_limite" class="ml-2 text-xs text-gray-400">
                         {{ new Date(task.data_limite).toLocaleDateString('pt-BR') }}
                     </span>
                 </div>
-                <div class="task-actions">
-                    <button @click="openEditModal(task)" class="btn btn-edit">Editar</button>
-                    <button @click="deleteTask(task.id)" class="btn btn-delete">Deletar</button>
+                <div class="flex gap-2">
+                    <button @click="openEditModal(task)"
+                        class="px-3 py-1 text-xs bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200 transition font-medium shadow-sm">
+                        Editar
+                    </button>
+                    <button @click="deleteTask(task.id)"
+                        class="px-3 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition font-medium shadow-sm">
+                        Deletar
+                    </button>
                 </div>
             </li>
         </ul>
-        <div v-if="!loading && tasks.length === 0" class="no-tasks">
+        <div v-if="!taskStore.loading && taskStore.tasks.length === 0" class="text-center text-gray-500 py-8">
             Nenhuma tarefa encontrada.
         </div>
 
         <!-- Modal -->
-        <div v-if="showModal" class="modal-overlay">
-            <div class="modal">
-                <button @click="showModal = false" class="modal-close">&times;</button>
-                <h3>{{ isEdit ? 'Editar Tarefa' : 'Nova Tarefa' }}</h3>
-                <form @submit.prevent="saveTask" class="modal-form">
-                    <div class="form-group">
-                        <label>Nome</label>
+        <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center"
+            style="background: rgba(0,0,0,0.4);">
+            <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
+                <button @click="showModal = false"
+                    class="absolute top-2 right-2 text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+                <h3 class="text-xl font-bold mb-4">{{ isEdit ? 'Editar Tarefa' : 'Nova Tarefa' }}</h3>
+                <form @submit.prevent="saveTask" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Nome</label>
                         <input v-model="form.nome" type="text" required
-                            :class="{ 'input-error': error && !form.nome }" />
+                            class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring focus:border-blue-400"
+                            :class="{ 'border-red-500': error && !form.nome }" />
                     </div>
-                    <div class="form-group">
-                        <label>Descrição</label>
-                        <input v-model="form.descricao" type="text" />
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Descrição</label>
+                        <input v-model="form.descricao" type="text"
+                            class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring focus:border-blue-400" />
                     </div>
-                    <div class="form-group">
-                        <label>Data Limite</label>
-                        <input v-model="form.data_limite" type="date" />
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Data Limite</label>
+                        <input v-model="form.data_limite" type="date"
+                            class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring focus:border-blue-400" />
                     </div>
-                    <div v-if="error" class="form-error">{{ error }}</div>
-                    <div class="modal-actions">
-                        <button type="button" @click="showModal = false" class="btn btn-cancel">Cancelar</button>
-                        <button type="submit" class="btn btn-primary">Salvar</button>
+                    <div v-if="error" class="text-red-600 text-sm">{{ error }}</div>
+                    <div class="flex justify-end gap-2 mt-4">
+                        <button type="button" @click="showModal = false"
+                            class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition">
+                            Cancelar
+                        </button>
+                        <button type="submit"
+                            class="px-4 py-2 bg-blue-200 text-white rounded hover:bg-blue-400 transition font-semibold">
+                            Salvar
+                        </button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
 </template>
-
-<style scoped>
-.tasks-container {
-    max-width: 800px;
-    margin: 40px auto;
-    background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08);
-    padding: 32px 24px;
-    font-family: Arial, sans-serif;
-}
-
-.btn {
-    padding: 8px 18px;
-    border: none;
-    border-radius: 6px;
-    font-size: 1rem;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-
-.btn-primary {
-    background: #2563eb;
-    color: #fff;
-}
-
-.btn-primary:hover {
-    background: #1d4ed8;
-}
-
-.btn-edit {
-    background: #facc15;
-    color: #7c5700;
-    margin-right: 8px;
-}
-
-.btn-edit:hover {
-    background: #fde047;
-}
-
-.btn-delete {
-    background: #f87171;
-    color: #fff;
-}
-
-.btn-delete:hover {
-    background: #dc2626;
-}
-
-.loading {
-    text-align: center;
-    color: #2563eb;
-    font-size: 1.1rem;
-    padding: 32px 0;
-}
-
-.tasks-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
-.task-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 18px 0;
-    border-bottom: 1px solid #f1f1f1;
-}
-
-.task-info {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.task-title {
-    font-weight: 500;
-    font-size: 1.1rem;
-    color: #222;
-}
-
-.task-title.completed {
-    text-decoration: line-through;
-    color: #bdbdbd;
-}
-
-.status {
-    padding: 2px 10px;
-    border-radius: 12px;
-    font-size: 0.85rem;
-    font-weight: bold;
-}
-
-.status-overdue {
-    background: #fee2e2;
-    color: #dc2626;
-}
-
-.status-done {
-    background: #bbf7d0;
-    color: #166534;
-}
-
-.status-pending {
-    background: #fef9c3;
-    color: #a16207;
-}
-
-.task-date {
-    font-size: 0.85rem;
-    color: #888;
-    margin-left: 8px;
-}
-
-.task-actions {
-    display: flex;
-    gap: 6px;
-}
-
-.no-tasks {
-    text-align: center;
-    color: #888;
-    padding: 32px 0;
-}
-
-.modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.25);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-}
-
-.modal {
-    background: #fff;
-    border-radius: 10px;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.13);
-    padding: 32px 28px 24px 28px;
-    min-width: 320px;
-    position: relative;
-}
-
-.modal-close {
-    position: absolute;
-    top: 12px;
-    right: 16px;
-    background: none;
-    border: none;
-    font-size: 2rem;
-    color: #bbb;
-    cursor: pointer;
-}
-
-.modal-close:hover {
-    color: #222;
-}
-
-.modal-form .form-group {
-    margin-bottom: 18px;
-    display: flex;
-    flex-direction: column;
-}
-
-.modal-form label {
-    font-size: 0.95rem;
-    margin-bottom: 4px;
-    color: #333;
-}
-
-.modal-form input[type="text"],
-.modal-form input[type="date"] {
-    padding: 8px 10px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    font-size: 1rem;
-}
-
-.input-error {
-    border-color: #dc2626 !important;
-}
-
-.form-check {
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;
-}
-
-.form-error {
-    color: #dc2626;
-    font-size: 0.95rem;
-    margin-bottom: 8px;
-}
-
-.modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-top: 12px;
-}
-
-.btn-cancel {
-    background: #e5e7eb;
-    color: #222;
-}
-
-.btn-cancel:hover {
-    background: #d1d5db;
-}
-
-.toggle-switch {
-    position: relative;
-    display: inline-block;
-    width: 38px;
-    height: 22px;
-    margin-right: 12px;
-    vertical-align: middle;
-}
-
-.toggle-switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-
-.slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: #ccc;
-    transition: .3s;
-    border-radius: 22px;
-}
-
-.slider:before {
-    position: absolute;
-    content: "";
-    height: 16px;
-    width: 16px;
-    left: 3px;
-    bottom: 3px;
-    background-color: white;
-    transition: .3s;
-    border-radius: 50%;
-}
-
-.toggle-switch input:checked+.slider {
-    background-color: #2563eb;
-}
-
-.toggle-switch input:checked+.slider:before {
-    transform: translateX(16px);
-}
-</style>
